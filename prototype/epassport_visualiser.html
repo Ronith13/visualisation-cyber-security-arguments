@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualisation of Logical Cyber Security Arguments</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0e1a;
+    --surface:   #111627;
+    --surface2:  #1a2035;
+    --border:    #232d47;
+    --border2:   #2e3d5e;
+    --text:      #e2e8f8;
+    --muted:     #7a8aaa;
+    --accent:    #4a9eff;
+    --accent2:   #7b5ea7;
+    --attack-in: #ff4a6b;
+    --attack-out:#1bcc88;
+    --defence-on:#00d4aa;
+    --defence-off:#3a4560;
+    --goal-in:   #ff3a5c;
+    --goal-out:  #00e896;
+    --mono:      'Space Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── BACKGROUND GRID ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative; z-index: 10;
+    padding: 20px 32px 0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(74,158,255,0.06) 0%, transparent 100%);
+  }
+  .header-left { display: flex; flex-direction: column; gap: 4px; padding-bottom: 16px; }
+  .header-eyebrow {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+    color: var(--accent); text-transform: uppercase;
+  }
+  h1 {
+    font-size: 22px; font-weight: 600; color: var(--text);
+    line-height: 1.2;
+  }
+  h1 span { color: var(--accent); }
+  .header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* Goal Status Badge */
+  #goal-badge {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-radius: 6px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    transition: all 0.4s ease;
+    align-self: center;
+  }
+  #goal-badge.secure {
+    border-color: var(--goal-out);
+    background: rgba(0,232,150,0.08);
+    box-shadow: 0 0 20px rgba(0,232,150,0.15);
+  }
+  #goal-badge.compromised {
+    border-color: var(--goal-in);
+    background: rgba(255,58,92,0.08);
+    box-shadow: 0 0 20px rgba(255,58,92,0.15);
+  }
+  #goal-indicator {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.4s ease;
+  }
+  #goal-badge.secure #goal-indicator { background: var(--goal-out); box-shadow: 0 0 8px var(--goal-out); }
+  #goal-badge.compromised #goal-indicator { background: var(--goal-in); box-shadow: 0 0 8px var(--goal-in); }
+  #goal-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  #goal-status { font-weight: 600; font-size: 13px; color: var(--text); }
+
+  /* ── TABS ── */
+  nav.tabs {
+    position: relative; z-index: 10;
+    display: flex; gap: 0;
+    padding: 0 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 12px 20px;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.2s; position: relative; top: 1px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: flex; }
+
+  /* ── MAIN LAYOUT ── */
+  #tab-tree {
+    position: relative; z-index: 1;
+    height: calc(100vh - 130px);
+    overflow: hidden;
+  }
+
+  /* ── CONTROLS SIDEBAR ── */
+  aside {
+    width: 260px; min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .aside-section {
+    padding: 16px; border-bottom: 1px solid var(--border);
+  }
+  .aside-section h3 {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 12px;
+  }
+
+  /* Defence toggles */
+  .defence-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s; margin-bottom: 6px;
+    background: var(--surface2);
+  }
+  .defence-item:hover { border-color: var(--border2); }
+  .defence-item.active { border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.06); }
+  .defence-item.inactive { opacity: 0.5; }
+
+  .toggle {
+    width: 32px; height: 18px; border-radius: 9px;
+    background: var(--defence-off); position: relative;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle::after {
+    content: ''; position: absolute;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: white; top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+  .defence-item.active .toggle { background: var(--defence-on); }
+  .defence-item.active .toggle::after { left: 17px; }
+
+  .defence-name { font-size: 12px; font-weight: 500; flex: 1; }
+  .defence-std {
+    font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 1px;
+  }
+
+  /* Detail Panel */
+  #detail-panel { padding: 14px; flex: 1; }
+  #detail-panel h3 {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 12px;
+  }
+  #detail-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+  #detail-content { display: none; }
+  #detail-node-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  #detail-type-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 3px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  #detail-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 10px; }
+  .detail-row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+  .detail-key { font-family: var(--mono); font-size: 9px; color: var(--muted); width: 56px; flex-shrink: 0; }
+  .detail-val { font-size: 12px; color: var(--text); }
+  #detail-status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    margin-top: 8px;
+  }
+
+  /* ── SVG CANVAS ── */
+  #svg-wrap {
+    flex: 1; overflow: auto; position: relative; cursor: grab;
+  }
+  #svg-wrap:active { cursor: grabbing; }
+  #adt-svg { display: block; }
+
+  /* Node styles */
+  .node-attack { cursor: pointer; }
+  .node-attack rect {
+    rx: 8;
+    fill: var(--surface2); stroke: var(--border2); stroke-width: 1.5;
+    transition: all 0.35s ease;
+  }
+  .node-attack.IN rect { fill: rgba(255,74,107,0.12); stroke: var(--attack-in); }
+  .node-attack.OUT rect { fill: rgba(27,204,136,0.1); stroke: var(--attack-out); }
+  .node-attack text { fill: var(--text); font-family: 'DM Sans', sans-serif; font-size: 11px; }
+  .node-attack .status-dot {
+    transition: all 0.35s ease;
+  }
+
+  .node-defence { cursor: pointer; }
+  .node-defence polygon {
+    fill: rgba(0,212,170,0.08); stroke: var(--defence-on); stroke-width: 1.5;
+    transition: all 0.35s ease;
+  }
+  .node-defence.inactive polygon { fill: var(--surface2); stroke: var(--defence-off); opacity: 0.5; }
+  .node-defence text { fill: var(--text); font-size: 11px; font-family: 'DM Sans', sans-serif; }
+
+  .node-goal rect {
+    fill: rgba(74,158,255,0.08); stroke: var(--accent); stroke-width: 2;
+    rx: 10;
+    transition: all 0.4s ease;
+    filter: drop-shadow(0 0 10px rgba(74,158,255,0.2));
+  }
+  .node-goal.IN rect { fill: rgba(255,58,92,0.12); stroke: var(--goal-in); filter: drop-shadow(0 0 12px rgba(255,58,92,0.25)); }
+  .node-goal.OUT rect { fill: rgba(0,232,150,0.1); stroke: var(--goal-out); filter: drop-shadow(0 0 12px rgba(0,232,150,0.25)); }
+  .node-goal text { fill: var(--text); font-weight: 600; font-family: 'DM Sans', sans-serif; }
+
+  .node-vector rect {
+    fill: var(--surface2); stroke: var(--border2); stroke-width: 1.5;
+    rx: 6; transition: all 0.35s;
+  }
+  .node-vector.IN rect { fill: rgba(255,74,107,0.08); stroke: rgba(255,74,107,0.5); }
+  .node-vector.OUT rect { fill: rgba(27,204,136,0.06); stroke: rgba(27,204,136,0.4); }
+  .node-vector text { fill: var(--muted); font-size: 10px; font-family: 'DM Sans', sans-serif; }
+
+  .tree-edge { fill: none; stroke: var(--border2); stroke-width: 1.5; }
+  .defeat-edge {
+    fill: none; stroke: var(--defence-on); stroke-width: 1.5;
+    stroke-dasharray: 5 4; opacity: 0.7;
+    transition: opacity 0.3s;
+  }
+  .defeat-edge.inactive { opacity: 0.15; stroke: var(--muted); }
+
+  /* severity pip */
+  .sev-pip { font-family: 'Space Mono', monospace; font-size: 9px; }
+
+  /* ── THREAT MATRIX ── */
+  #tab-matrix {
+    flex-direction: column; padding: 24px 32px;
+    position: relative; z-index: 1; overflow-y: auto;
+    max-height: calc(100vh - 130px);
+  }
+  .matrix-header {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+  }
+  table.matrix-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  .matrix-table thead tr {
+    border-bottom: 1px solid var(--border2);
+  }
+  .matrix-table thead th {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 0 14px 10px; text-align: left; font-weight: 400;
+  }
+  .matrix-table tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .matrix-table tbody tr:hover { background: var(--surface2); }
+  .matrix-table td { padding: 12px 14px; vertical-align: middle; }
+  .matrix-name { font-weight: 500; }
+  .matrix-vector {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+    background: var(--surface2); padding: 3px 7px; border-radius: 3px;
+    display: inline-block;
+  }
+  .matrix-dread {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+  }
+  .dread-high { color: var(--attack-in); }
+  .dread-med  { color: #ffaa44; }
+  .matrix-defence { font-size: 12px; color: var(--defence-on); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 3px;
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .pill-IN { background: rgba(255,74,107,0.15); color: var(--attack-in); border: 1px solid rgba(255,74,107,0.3); }
+  .pill-OUT { background: rgba(27,204,136,0.12); color: var(--attack-out); border: 1px solid rgba(27,204,136,0.3); }
+
+  /* ── ARGUMENTATION STATUS ── */
+  #tab-args {
+    flex-direction: column; padding: 24px 32px;
+    position: relative; z-index: 1; overflow-y: auto;
+    max-height: calc(100vh - 130px);
+  }
+  .args-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;
+  }
+  .arg-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px; transition: all 0.3s;
+  }
+  .arg-card.IN { border-color: rgba(255,74,107,0.35); background: rgba(255,74,107,0.05); }
+  .arg-card.OUT { border-color: rgba(27,204,136,0.3); background: rgba(27,204,136,0.04); }
+  .arg-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .arg-card-name { font-weight: 500; font-size: 13px; }
+  .arg-card-type { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .arg-card-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  .arg-verdict { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+  .verdict-IN { color: var(--attack-in); }
+  .verdict-OUT { color: var(--attack-out); }
+  .verdict-DEF { color: var(--defence-on); }
+
+  .args-summary {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 16px; margin-bottom: 20px;
+    font-size: 13px; line-height: 1.7; color: var(--muted);
+  }
+  .args-summary strong { color: var(--text); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* Animate IN status nodes */
+  @keyframes pulse-red {
+    0%,100% { opacity: 1; } 50% { opacity: 0.7; }
+  }
+  .node-attack.IN rect { animation: pulse-red 2.5s ease-in-out infinite; }
+  .node-goal.IN rect   { animation: pulse-red 1.8s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="header-eyebrow">MSc Dissertation · University of Strathclyde · Ronith Naveen Kumar</div>
+    <h1>Visualisation of Logical <span>Cyber Security</span> Arguments</h1>
+    <div class="header-sub">Grounded argumentation semantics · ICAO 9303 · Interactive threat model</div>
+  </div>
+  <div id="goal-badge" class="secure">
+    <div id="goal-indicator"></div>
+    <div>
+      <div id="goal-label">SECURITY GOAL</div>
+      <div id="goal-status">SECURE — All threats defeated</div>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" onclick="switchTab('tree')">01 · Attack-Defence Tree</button>
+  <button class="tab-btn" onclick="switchTab('matrix')">02 · Threat Matrix</button>
+  <button class="tab-btn" onclick="switchTab('args')">03 · Argumentation Status</button>
+</nav>
+
+<!-- TAB 1: TREE -->
+<div id="tab-tree" class="tab-panel active">
+  <aside>
+    <div class="aside-section">
+      <h3>Defence Mechanisms</h3>
+      <div id="defence-controls"></div>
+    </div>
+    <div id="detail-panel">
+      <h3>Node Detail</h3>
+      <div id="detail-empty">Click any node to inspect it.</div>
+      <div id="detail-content">
+        <div id="detail-node-name"></div>
+        <div id="detail-type-badge"></div>
+        <div id="detail-desc"></div>
+        <div class="detail-row"><span class="detail-key">SEVERITY</span><span id="detail-severity" class="detail-val"></span></div>
+        <div class="detail-row"><span class="detail-key">STANDARD</span><span id="detail-std" class="detail-val"></span></div>
+        <div class="detail-row"><span class="detail-key">VECTOR</span><span id="detail-vector" class="detail-val"></span></div>
+        <div id="detail-status-badge"></div>
+      </div>
+    </div>
+  </aside>
+  <div id="svg-wrap">
+    <svg id="adt-svg"></svg>
+  </div>
+</div>
+
+<!-- TAB 2: THREAT MATRIX -->
+<div id="tab-matrix" class="tab-panel">
+  <div class="matrix-header">Threat Matrix · ePassport ICAO 9303 Attack Surface</div>
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th>Attack</th>
+        <th>Vector</th>
+        <th>DREAD</th>
+        <th>STRIDE</th>
+        <th>Countered By</th>
+        <th>Standard</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="matrix-body"></tbody>
+  </table>
+</div>
+
+<!-- TAB 3: ARGUMENTATION -->
+<div id="tab-args" class="tab-panel">
+  <div id="args-summary-text" class="args-summary"></div>
+  <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">Argument Labellings · Grounded Semantics (Dung, 1995)</div>
+  <div class="args-grid" id="args-grid"></div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// DATA MODEL
+// ════════════════════════════════════════════════════════════════
+const ATTACKS = [
+  { id:'skimming',   name:'RFID Skimming',    vector:'RF Interface',   dread:7.2, stride:'Info Disclosure',      std:'ICAO 9303 §4.2',   defeatedBy:['bac'],  desc:'Unauthorised contactless reading of chip data by a concealed reader operating without the holder\'s knowledge. Exploits the passive RF interface.' },
+  { id:'eaves',      name:'Eavesdropping',     vector:'RF Interface',   dread:6.4, stride:'Info Disclosure',      std:'ICAO 9303 §4.3',   defeatedBy:['bac'],  desc:'Interception of the RF communication channel between a legitimate reader and the chip, enabling passive extraction of session data.' },
+  { id:'cloning',    name:'Chip Cloning',      vector:'Data Integrity', dread:9.1, stride:'Spoofing',             std:'ICAO 9303 §6.1',   defeatedBy:['aa'],   desc:'Copying of all accessible data from a genuine chip to a blank writable medium, producing a functional duplicate document.' },
+  { id:'forgery',    name:'Data Forgery',      vector:'Data Integrity', dread:8.8, stride:'Tampering',           std:'ICAO 9303 Part 12', defeatedBy:['pki'],  desc:'Modification of biometric or biographical data groups combined with regeneration of the Security Object, bypassing data integrity checks.' },
+  { id:'tracing',    name:'Holder Tracing',    vector:'Privacy',        dread:7.6, stride:'Info Disclosure',      std:'ISO/IEC 14443-3',  defeatedBy:['uid'],  desc:'Exploitation of static chip identifiers or distinguishable chip responses to construct a location and interaction history for a specific holder.' },
+  { id:'biometric',  name:'Biometric Theft',   vector:'Privacy',        dread:9.4, stride:'Elevation of Privilege',std:'BSI TR-03110',     defeatedBy:['eac'],  desc:'Extraction of EAC-protected fingerprint or iris data from a chip whose terminal certificate control has been bypassed or compromised.' },
+];
+
+const DEFENCES = [
+  { id:'bac', name:'BAC / PACE',           std:'ICAO 9303 Part 11', desc:'MRZ-derived key establishment preventing cold RF access. PACE uses elliptic-curve Diffie-Hellman for improved session key strength.' },
+  { id:'aa',  name:'Active Authentication', std:'ICAO 9303 §6.1',   desc:'Challenge-response protocol using a chip-resident private key, proving the physical chip — not a cloned copy — is present.' },
+  { id:'pki', name:'Passive Auth / PKI',    std:'ICAO 9303 Part 12', desc:'Document Signer certificate chain allowing terminals to verify data group integrity and authenticity against the issuing state\'s CSCA.' },
+  { id:'uid', name:'Random UID',            std:'ISO/IEC 14443-3',  desc:'Session-randomised chip identifier preventing linkability attacks that exploit static identifiers broadcast before secure channel establishment.' },
+  { id:'eac', name:'Extended Access Control',std:'BSI TR-03110',    desc:'Terminal certificate verification required before releasing DG3 (fingerprints) or DG4 (iris), mandated by EU for EAC-compliant passports.' },
+];
+
+// Active defences state
+const state = { active: new Set(['bac','aa','pki','uid','eac']), selected: null };
+
+// ════════════════════════════════════════════════════════════════
+// ARGUMENTATION ENGINE
+// ════════════════════════════════════════════════════════════════
+function computeLabels() {
+  const labels = {};
+  // Defences: active = IN, inactive = inactive
+  for (const d of DEFENCES) labels[d.id] = state.active.has(d.id) ? 'IN_DEF' : 'OFF_DEF';
+  // Leaf attacks
+  for (const a of ATTACKS) {
+    const defeated = a.defeatedBy.some(did => labels[did] === 'IN_DEF');
+    labels[a.id] = defeated ? 'OUT' : 'IN';
+  }
+  // Vector nodes
+  const rf   = ['skimming','eaves'].every(id => labels[id]==='OUT') ? 'OUT' : 'IN';
+  const data  = ['cloning','forgery'].every(id => labels[id]==='OUT') ? 'OUT' : 'IN';
+  const priv  = ['tracing','biometric'].every(id => labels[id]==='OUT') ? 'OUT' : 'IN';
+  labels['rf'] = rf; labels['data'] = data; labels['priv'] = priv;
+  // Goal
+  labels['goal'] = [rf,data,priv].every(v=>v==='OUT') ? 'OUT' : 'IN';
+  return labels;
+}
+
+// ════════════════════════════════════════════════════════════════
+// SVG TREE LAYOUT
+// ════════════════════════════════════════════════════════════════
+const W=160, H=48, YGAP=96, XGAP=24;
+
+const LAYOUT = {
+  goal:     { x:420, y:20,   w:200, h:54, type:'goal',   label:'ePassport Security Goal', sub:'OR-node' },
+  rf:       { x:120, y:148,  w:160, h:44, type:'vector', label:'RF Interface', sub:'OR' },
+  data:     { x:400, y:148,  w:180, h:44, type:'vector', label:'Data Integrity', sub:'OR' },
+  priv:     { x:680, y:148,  w:160, h:44, type:'vector', label:'Privacy', sub:'OR' },
+  skimming: { x:20,  y:276,  w:160, h:52, type:'attack', label:'RFID Skimming',   dread:7.2 },
+  eaves:    { x:200, y:276,  w:160, h:52, type:'attack', label:'Eavesdropping',   dread:6.4 },
+  cloning:  { x:320, y:276,  w:160, h:52, type:'attack', label:'Chip Cloning',    dread:9.1 },
+  forgery:  { x:500, y:276,  w:160, h:52, type:'attack', label:'Data Forgery',    dread:8.8 },
+  tracing:  { x:620, y:276,  w:160, h:52, type:'attack', label:'Holder Tracing',  dread:7.6 },
+  biometric:{ x:800, y:276,  w:160, h:52, type:'attack', label:'Biometric Theft', dread:9.4 },
+  bac:      { x:20,  y:420,  w:160, h:52, type:'defence',label:'BAC / PACE',      std:'ICAO Part 11' },
+  aa:       { x:320, y:420,  w:160, h:52, type:'defence',label:'Active Auth',     std:'ICAO §6.1' },
+  pki:      { x:500, y:420,  w:160, h:52, type:'defence',label:'PKI / PA',        std:'ICAO Part 12' },
+  uid:      { x:620, y:420,  w:160, h:52, type:'defence',label:'Random UID',      std:'ISO 14443-3' },
+  eac:      { x:800, y:420,  w:160, h:52, type:'defence',label:'EAC',             std:'BSI TR-03110' },
+};
+
+const TREE_EDGES = [
+  ['goal','rf'],['goal','data'],['goal','priv'],
+  ['rf','skimming'],['rf','eaves'],
+  ['data','cloning'],['data','forgery'],
+  ['priv','tracing'],['priv','biometric'],
+];
+
+const DEFEAT_EDGES = [
+  ['bac','skimming'],['bac','eaves'],
+  ['aa','cloning'],
+  ['pki','forgery'],
+  ['uid','tracing'],
+  ['eac','biometric'],
+];
+
+function cx(n) { const l=LAYOUT[n]; return l.x + l.w/2; }
+function cy(n) { const l=LAYOUT[n]; return l.y + l.h/2; }
+
+function buildSVG(labels) {
+  const svg = document.getElementById('adt-svg');
+  const SVG_W = 1000, SVG_H = 500;
+  svg.setAttribute('width', SVG_W);
+  svg.setAttribute('height', SVG_H);
+  svg.setAttribute('viewBox', `0 0 ${SVG_W} ${SVG_H}`);
+
+  let html = `<defs>
+    <marker id="arr-defeat" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#00d4aa"/>
+    </marker>
+    <marker id="arr-defeat-off" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#3a4560"/>
+    </marker>
+  </defs>`;
+
+  // Tree edges
+  for (const [a,b] of TREE_EDGES) {
+    const ax=cx(a), ay=cy(a)+LAYOUT[a].h/2, bx=cx(b), by=cy(b)-LAYOUT[b].h/2;
+    const mx=(ax+bx)/2, my=(ay+by)/2;
+    html += `<path class="tree-edge" d="M${ax},${ay} C${ax},${ay+30} ${bx},${by-30} ${bx},${by}"/>`;
+  }
+
+  // Defeat edges
+  for (const [d,a] of DEFEAT_EDGES) {
+    const active = labels[d]==='IN_DEF';
+    const dx=cx(d), dy=LAYOUT[d].y, ax=cx(a), ay=cy(a)+LAYOUT[a].h/2+4;
+    const cls = active ? 'defeat-edge' : 'defeat-edge inactive';
+    const marker = active ? 'arr-defeat' : 'arr-defeat-off';
+    // curve upward from defence to attack
+    html += `<path class="${cls}" marker-end="url(#${marker})"
+      d="M${dx},${dy} C${dx},${dy-30} ${ax},${ay+30} ${ax},${ay}"/>`;
+  }
+
+  // Nodes
+  for (const [id, l] of Object.entries(LAYOUT)) {
+    const lbl = labels[id] || '';
+    const isActive = state.active.has(id);
+    const selectedClass = state.selected===id ? ' selected' : '';
+
+    if (l.type === 'goal') {
+      const statusClass = lbl === 'OUT' ? 'OUT' : lbl === 'IN' ? 'IN' : '';
+      html += `<g class="node-goal ${statusClass}${selectedClass}" onclick="selectNode('${id}')" transform="translate(${l.x},${l.y})">
+        <rect width="${l.w}" height="${l.h}" rx="10"/>
+        <text x="${l.w/2}" y="${l.h/2-8}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="600">${l.label}</text>
+        <text x="${l.w/2}" y="${l.h/2+10}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="var(--muted)" font-family="var(--mono)">${l.sub}</text>
+      </g>`;
+
+    } else if (l.type === 'vector') {
+      const statusClass = lbl==='OUT'?'OUT':lbl==='IN'?'IN':'';
+      html += `<g class="node-vector ${statusClass}" transform="translate(${l.x},${l.y})">
+        <rect width="${l.w}" height="${l.h}" rx="6"/>
+        <text x="${l.w/2}" y="${l.h/2-7}" text-anchor="middle" dominant-baseline="middle" font-size="11">${l.label}</text>
+        <text x="${l.w/2}" y="${l.h/2+8}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="var(--muted)" font-family="var(--mono)">${l.sub}</text>
+      </g>`;
+
+    } else if (l.type === 'attack') {
+      const atk = ATTACKS.find(a=>a.id===id);
+      const statusClass = lbl==='OUT'?'OUT':lbl==='IN'?'IN':'';
+      const dreadCol = l.dread >= 9 ? '#ff4a6b' : l.dread >= 7.5 ? '#ff8844' : '#ffcc44';
+      html += `<g class="node-attack ${statusClass}${selectedClass}" onclick="selectNode('${id}')" transform="translate(${l.x},${l.y})">
+        <rect width="${l.w}" height="${l.h}" rx="8"/>
+        <text x="${l.w/2}" y="${l.h/2-9}" text-anchor="middle" font-size="11">${l.label}</text>
+        <text x="${l.w/2}" y="${l.h/2+7}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="${dreadCol}">DREAD ${l.dread}</text>
+        <circle class="status-dot" cx="${l.w-10}" cy="10" r="5" fill="${lbl==='OUT'?'var(--attack-out)':lbl==='IN'?'var(--attack-in)':'var(--muted)'}"/>
+      </g>`;
+
+    } else if (l.type === 'defence') {
+      const active = state.active.has(id);
+      const cls = active ? '' : 'inactive';
+      const hw = l.w/2, hh = l.h/2;
+      const inset = 10;
+      const pts = [
+        `${hw},${inset}`, `${l.w-inset},${hh-10}`, `${l.w-inset},${hh+10}`,
+        `${hw},${l.h-inset}`, `${inset},${hh+10}`, `${inset},${hh-10}`
+      ].join(' ');
+      html += `<g class="node-defence ${cls}${selectedClass}" onclick="selectNode('${id}')" transform="translate(${l.x},${l.y})">
+        <polygon points="${pts}"/>
+        <text x="${hw}" y="${hh-7}" text-anchor="middle" font-size="11">${l.label}</text>
+        <text x="${hw}" y="${hh+8}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--muted)">${l.std}</text>
+      </g>`;
+    }
+  }
+
+  svg.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// DEFENCE CONTROLS
+// ════════════════════════════════════════════════════════════════
+function buildControls() {
+  const wrap = document.getElementById('defence-controls');
+  wrap.innerHTML = DEFENCES.map(d => `
+    <div class="defence-item ${state.active.has(d.id)?'active':'inactive'}" id="ctrl-${d.id}" onclick="toggleDefence('${d.id}')">
+      <div class="toggle"></div>
+      <div>
+        <div class="defence-name">${d.name}</div>
+        <div class="defence-std">${d.std}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleDefence(id) {
+  if (state.active.has(id)) state.active.delete(id);
+  else state.active.add(id);
+  update();
+}
+
+// ════════════════════════════════════════════════════════════════
+// UPDATE ALL VIEWS
+// ════════════════════════════════════════════════════════════════
+function update() {
+  const labels = computeLabels();
+  buildSVG(labels);
+  buildControls();
+  updateGoalBadge(labels);
+  updateMatrix(labels);
+  updateArgsPanel(labels);
+  if (state.selected) updateDetailPanel(state.selected, labels);
+}
+
+function updateGoalBadge(labels) {
+  const badge = document.getElementById('goal-badge');
+  const status = document.getElementById('goal-status');
+  const secure = labels['goal'] === 'OUT';
+  badge.className = secure ? 'secure' : 'compromised';
+  if (secure) {
+    status.textContent = 'SECURE — All threats defeated';
+  } else {
+    const active = ATTACKS.filter(a => labels[a.id]==='IN').map(a=>a.name);
+    status.textContent = `COMPROMISED — ${active.length} active threat${active.length>1?'s':''}`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// NODE DETAIL
+// ════════════════════════════════════════════════════════════════
+function selectNode(id) {
+  state.selected = id;
+  const labels = computeLabels();
+  updateDetailPanel(id, labels);
+}
+
+function updateDetailPanel(id, labels) {
+  const lbl = labels[id];
+  const atk = ATTACKS.find(a=>a.id===id);
+  const def = DEFENCES.find(d=>d.id===id);
+  const isGoal = id === 'goal';
+
+  document.getElementById('detail-empty').style.display = 'none';
+  document.getElementById('detail-content').style.display = 'block';
+
+  if (atk) {
+    document.getElementById('detail-node-name').textContent = atk.name;
+    const tb = document.getElementById('detail-type-badge');
+    tb.textContent = 'ATTACK NODE'; tb.style.background='rgba(255,74,107,0.15)'; tb.style.color='var(--attack-in)';
+    document.getElementById('detail-desc').textContent = atk.desc;
+    document.getElementById('detail-severity').textContent = `DREAD ${atk.dread}/10`;
+    document.getElementById('detail-std').textContent = atk.std;
+    document.getElementById('detail-vector').textContent = atk.vector;
+    const sb = document.getElementById('detail-status-badge');
+    if (lbl==='OUT') { sb.textContent='● OUT — Defeated'; sb.style.background='rgba(27,204,136,0.12)'; sb.style.color='var(--attack-out)'; sb.style.border='1px solid rgba(27,204,136,0.3)'; }
+    else { sb.textContent='● IN — Viable attack'; sb.style.background='rgba(255,74,107,0.12)'; sb.style.color='var(--attack-in)'; sb.style.border='1px solid rgba(255,74,107,0.3)'; }
+  } else if (def) {
+    document.getElementById('detail-node-name').textContent = def.name;
+    const tb = document.getElementById('detail-type-badge');
+    tb.textContent='DEFENCE NODE'; tb.style.background='rgba(0,212,170,0.1)'; tb.style.color='var(--defence-on)';
+    document.getElementById('detail-desc').textContent = def.desc;
+    document.getElementById('detail-severity').textContent = '—';
+    document.getElementById('detail-std').textContent = def.std;
+    document.getElementById('detail-vector').textContent = 'Countermeasure';
+    const sb = document.getElementById('detail-status-badge');
+    const on = state.active.has(def.id);
+    sb.textContent = on ? '● ACTIVE — Deployed' : '○ INACTIVE — Not deployed';
+    sb.style.background = on ? 'rgba(0,212,170,0.1)' : 'rgba(100,100,120,0.15)';
+    sb.style.color = on ? 'var(--defence-on)' : 'var(--muted)';
+    sb.style.border = on ? '1px solid rgba(0,212,170,0.3)' : '1px solid var(--border2)';
+  } else if (isGoal) {
+    document.getElementById('detail-node-name').textContent = 'ePassport Security Goal';
+    const tb = document.getElementById('detail-type-badge');
+    tb.textContent='ROOT GOAL'; tb.style.background='rgba(74,158,255,0.12)'; tb.style.color='var(--accent)';
+    document.getElementById('detail-desc').textContent = 'The top-level attacker objective: successfully breach any aspect of ePassport security. Satisfied if any child attack vector node is IN.';
+    document.getElementById('detail-severity').textContent = 'Critical';
+    document.getElementById('detail-std').textContent = 'ICAO 9303';
+    document.getElementById('detail-vector').textContent = 'OR-composition over 3 vectors';
+    const sb = document.getElementById('detail-status-badge');
+    if (lbl==='OUT') { sb.textContent='● OUT — Goal defeated'; sb.style.background='rgba(27,204,136,0.12)'; sb.style.color='var(--attack-out)'; sb.style.border='1px solid rgba(27,204,136,0.3)'; }
+    else { sb.textContent='● IN — Goal achieved by attacker'; sb.style.background='rgba(255,74,107,0.12)'; sb.style.color='var(--attack-in)'; sb.style.border='1px solid rgba(255,74,107,0.3)'; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// THREAT MATRIX
+// ════════════════════════════════════════════════════════════════
+function updateMatrix(labels) {
+  const body = document.getElementById('matrix-body');
+  body.innerHTML = ATTACKS.map(a => {
+    const lbl = labels[a.id];
+    const dreadClass = a.dread >= 9 ? 'dread-high' : 'dread-med';
+    const defNames = a.defeatedBy.map(did => DEFENCES.find(d=>d.id===did)?.name).join(', ');
+    const pillClass = lbl==='OUT' ? 'pill-OUT' : 'pill-IN';
+    const pillText  = lbl==='OUT' ? '● OUT' : '● IN';
+    return `<tr>
+      <td class="matrix-name">${a.name}</td>
+      <td><span class="matrix-vector">${a.vector}</span></td>
+      <td><span class="matrix-dread ${dreadClass}">${a.dread}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${a.stride}</td>
+      <td class="matrix-defence">${defNames}</td>
+      <td style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.std}</td>
+      <td><span class="status-pill ${pillClass}">${pillText}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// ARGUMENTATION STATUS PANEL
+// ════════════════════════════════════════════════════════════════
+function updateArgsPanel(labels) {
+  // Summary
+  const activeAttacks = ATTACKS.filter(a=>labels[a.id]==='IN');
+  const summary = document.getElementById('args-summary-text');
+  if (labels['goal']==='OUT') {
+    summary.innerHTML = `<strong>Security Verdict: SECURE.</strong> Under the current defensive configuration, all six modelled attacks are labelled <strong style="color:var(--attack-out)">OUT</strong> under Dung\'s grounded semantics. Every attack node is defeated by at least one active defence. The root security goal is therefore also labelled OUT — the attacker cannot achieve their objective.`;
+  } else {
+    const names = activeAttacks.map(a=>`<strong style="color:var(--attack-in)">${a.name}</strong>`).join(', ');
+    summary.innerHTML = `<strong>Security Verdict: COMPROMISED.</strong> ${activeAttacks.length} attack${activeAttacks.length>1?'s are':' is'} currently labelled <strong style="color:var(--attack-in)">IN</strong>: ${names}. These attacks have no active defeating defence in the current configuration. The root security goal is labelled IN — the attacker can achieve their objective via at least one viable attack path.`;
+  }
+
+  // Cards
+  const grid = document.getElementById('args-grid');
+  const allNodes = [
+    ...ATTACKS.map(a=>({id:a.id, name:a.name, type:'Attack', desc:a.desc, lbl:labels[a.id]})),
+    ...DEFENCES.map(d=>({id:d.id, name:d.name, type:'Defence', desc:d.desc, lbl:labels[d.id]})),
+  ];
+  grid.innerHTML = allNodes.map(n=>{
+    const isAtk = n.type==='Attack';
+    const lbl = n.lbl;
+    const verdictClass = lbl==='OUT'?'verdict-OUT':lbl==='IN_DEF'?'verdict-DEF':'verdict-IN';
+    const verdictText  = lbl==='OUT'?'OUT — Defeated':lbl==='IN_DEF'?'IN — Active Defence':lbl==='OFF_DEF'?'INACTIVE — Not Deployed':'IN — Viable';
+    const cardClass    = lbl==='OUT'?'OUT':lbl==='IN'?'IN':'';
+    return `<div class="arg-card ${cardClass}">
+      <div class="arg-card-header">
+        <div>
+          <div class="arg-card-name">${n.name}</div>
+          <div class="arg-card-type">${n.type} Argument</div>
+        </div>
+        <div class="arg-verdict ${verdictClass}" style="font-size:10px">${verdictText}</div>
+      </div>
+      <div class="arg-card-desc">${n.desc.substring(0,100)}${n.desc.length>100?'…':''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+update();
+</script>
+</body>
+</html>
